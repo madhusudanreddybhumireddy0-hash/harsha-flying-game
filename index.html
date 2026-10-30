@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#090e1d"><title>HARSHA — Sky Challenge</title>
+<style>
+:root{--bg:#090e1d;--panel:#141d32;--cyan:#63e6ff;--gold:#ffd166;--pink:#ff648b}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#fff;touch-action:manipulation}
+body{display:grid;place-items:center;background:radial-gradient(ellipse at 50% 10%,#25385b 0,#10182c 45%,#070b16 100%)}
+#game{position:relative;width:min(100vw,520px);height:min(100dvh,900px);overflow:hidden;background:linear-gradient(#101a33 0%,#233957 72%,#15243b 100%);box-shadow:0 0 60px #0009}
+canvas{display:block;width:100%;height:100%}
+.hud{position:absolute;inset:16px 16px auto;display:flex;align-items:center;justify-content:space-between;z-index:2;pointer-events:none}
+.pill{background:#081225a8;border:1px solid #ffffff26;border-radius:999px;padding:9px 14px;font-weight:800;letter-spacing:.08em;backdrop-filter:blur(8px);text-shadow:0 2px 8px #000}
+#score{font-size:26px;color:#fff;min-width:70px;text-align:center}
+#sound{pointer-events:auto;color:white;background:#081225bd;border:1px solid #ffffff35;border-radius:50%;width:44px;height:44px;font-size:19px}
+.overlay{position:absolute;inset:0;display:grid;place-items:center;padding:24px;background:#05091672;z-index:4}
+.card{width:100%;max-width:390px;text-align:center;padding:26px 22px 24px;border-radius:28px;background:linear-gradient(145deg,#192640f5,#0e172af5);border:1px solid #ffffff35;box-shadow:0 22px 70px #0009}
+.kicker{color:var(--cyan);font-size:12px;font-weight:900;letter-spacing:.25em}
+h1{font-size:clamp(38px,11vw,58px);line-height:1;margin:10px 0 8px;letter-spacing:.06em;text-shadow:0 0 24px #63e6ff66}
+.sub{color:#b8c7dc;margin:0 0 18px;font-size:14px}
+.avatar{width:112px;height:112px;object-fit:cover;object-position:50% 27%;border-radius:50%;border:4px solid #ffd166;box-shadow:0 0 0 7px #ffd16620,0 10px 30px #0008}
+button.primary{width:100%;border:0;border-radius:16px;padding:16px 18px;margin-top:18px;background:linear-gradient(100deg,#1c75ff,#6c55ff);color:white;font-size:18px;font-weight:950;letter-spacing:.1em;box-shadow:0 10px 25px #255eff55}
+button.primary:active{transform:scale(.98)}
+.hint{font-size:12px;color:#9eb0c8;margin-top:14px;line-height:1.6}
+.stats{display:flex;justify-content:space-around;background:#ffffff0d;border:1px solid #ffffff1c;border-radius:16px;padding:14px;margin-top:18px}
+.stats b{display:block;font-size:26px}.stats span{font-size:11px;color:#9eb0c8;letter-spacing:.12em;font-weight:800}
+#toast{position:absolute;top:18%;left:0;right:0;text-align:center;font-weight:900;font-size:15px;letter-spacing:.1em;color:#ffe08a;text-shadow:0 3px 12px #000;pointer-events:none;z-index:3}
+@media(min-height:850px){#game{height:min(100dvh,900px)}}
+</style></head>
+<body>
+<div id="game">
+<canvas id="c"></canvas>
+<div class="hud"><div class="pill">HARSHA</div><div id="score" class="pill">0</div><button id="sound" aria-label="Toggle sound">🔊</button></div>
+<div id="toast"></div>
+<div id="overlay" class="overlay"><div class="card">
+<div class="kicker">THE SKY CHALLENGE</div><h1>HARSHA</h1><p class="sub">Fly high. Dodge the pillars. Beat your best!</p>
+<img class="avatar" src="harsha.jpg" alt="Harsha character">
+<div class="stats"><div><span>BEST SCORE</span><b id="best">0</b></div><div><span>CONTROLS</span><b> TAP</b></div></div>
+<button id="start" class="primary">START GAME</button><div class="hint">Tap anywhere to fly • Avoid the pillars<br>Sound effects use your 3 uploaded audio clips</div>
+</div></div>
+<audio id="s1" src="ReelAudio-9964.mp3" preload="auto"></audio><audio id="s2" src="ReelAudio-82817.mp3" preload="auto"></audio><audio id="s3" src="ReelAudio-26583.mp3" preload="auto"></audio>
+</div>
+<script>
+(()=>{
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),game=document.getElementById('game');
+const overlay=document.getElementById('overlay'),startBtn=document.getElementById('start'),scoreEl=document.getElementById('score'),bestEl=document.getElementById('best'),soundBtn=document.getElementById('sound'),toast=document.getElementById('toast');
+const img=new Image();img.src='harsha.jpg';
+const sounds=[1,2,3].map(n=>document.getElementById('s'+n));let soundOn=true,playing=false,ended=false,score=0,best=Number(localStorage.getItem('harshaBest')||0);
+bestEl.textContent=best;
+let W=400,H=700,dpr=1,bird={x:105,y:300,vy:0,r:23},pipes=[],frame=0,clouds=[];
+function resize(){const r=game.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);W=r.width;H=r.height;canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+addEventListener('resize',resize);resize();
+function play(i){if(!soundOn)return;try{sounds[i].currentTime=0;let p=sounds[i].play();if(p)p.catch(()=>{})}catch(e){}}
+function flap(){if(!playing){if(!ended)begin();return}bird.vy=-6.1;play(0)}
+function begin(){score=0;scoreEl.textContent='0';bird.y=H*.43;bird.vy=0;pipes=[];frame=0;playing=true;ended=false;overlay.style.display='none';toast.textContent='';}
+function finish(){if(!playing)return;playing=false;ended=true;play(1);best=Math.max(best,score);localStorage.setItem('harshaBest',best);bestEl.textContent=best;overlay.style.display='grid';overlay.querySelector('.kicker').textContent='GAME OVER';overlay.querySelector('h1').textContent='NICE TRY!';overlay.querySelector('.sub').textContent='You scored '+score+' points';startBtn.textContent='PLAY AGAIN';}
+startBtn.addEventListener('click',e=>{e.stopPropagation();begin()});
+game.addEventListener('pointerdown',e=>{if(e.target===startBtn||e.target===soundBtn)return; if(overlay.style.display!=='none')return;flap()});
+soundBtn.addEventListener('click',e=>{e.stopPropagation();soundOn=!soundOn;soundBtn.textContent=soundOn?'🔊':'🔇';if(!soundOn)sounds.forEach(a=>a.pause())});
+addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();if(overlay.style.display!=='none')begin();else flap()}});
+function rounded(x,y,w,h,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
+function draw(){
+ctx.clearRect(0,0,W,H);
+let sky=ctx.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#111a32');sky.addColorStop(.72,'#29445f');sky.addColorStop(1,'#17273e');ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+// stars
+for(let i=0;i<28;i++){let x=(i*97+20)%W,y=(i*53+35)%(H*.62);ctx.fillStyle='rgba(255,255,255,.25)';ctx.beginPath();ctx.arc(x,y,1.2,0,Math.PI*2);ctx.fill()}
+// clouds
+for(let i=0;i<5;i++){let x=((i*125-frame*.28)%(W+150)+W+150)%(W+150)-70,y=100+(i%3)*75;ctx.fillStyle='rgba(210,225,245,.17)';ctx.beginPath();ctx.arc(x,y,25,0,7);ctx.arc(x+27,y-10,31,0,7);ctx.arc(x+55,y+2,25,0,7);ctx.fill()}
+// skyline
+ctx.fillStyle='#14243a';for(let i=0;i<9;i++){let x=i*65-(frame*.5%65);let h=45+(i*37%90);ctx.fillRect(x,H-75-h,42,h)}
+ctx.fillStyle='#0d1b2d';ctx.fillRect(0,H-72,W,72);ctx.fillStyle='#536b83';ctx.fillRect(0,H-74,W,4);
+ctx.fillStyle='#71859b';for(let x=0;x<W;x+=38)ctx.fillRect(x+(frame*2%38),H-49,20,4);
+}
+function drawBird(){ctx.save();ctx.translate(bird.x,bird.y);ctx.rotate(Math.max(-.45,Math.min(.7,bird.vy*.055)));
+ctx.shadowColor='#ffd166';ctx.shadowBlur=16;
+if(img.complete&&img.naturalWidth){ctx.beginPath();ctx.arc(0,0,bird.r+2,0,Math.PI*2);ctx.clip();let scale=Math.max((bird.r*2)/img.width,(bird.r*2)/img.height);let iw=img.width*scale,ih=img.height*scale;ctx.drawImage(img,-iw/2,-ih*.33,iw,ih);ctx.restore();return}
+ctx.fillStyle='#ffd166';ctx.beginPath();ctx.arc(0,0,bird.r,0,7);ctx.fill();ctx.restore()}
+function drawPipes(){pipes.forEach(p=>{let grad=ctx.createLinearGradient(p.x,0,p.x+55,0);grad.addColorStop(0,'#168b78');grad.addColorStop(.5,'#39d6a5');grad.addColorStop(1,'#08715f');rounded(p.x,0,55,p.top,9,grad);rounded(p.x-6,p.top-18,67,18,7,'#48e0ae');rounded(p.x,p.bottom,55,H-p.bottom-74,9,grad);rounded(p.x-6,p.bottom,67,18,7,'#48e0ae')})}
+function tick(){
+frame++;if(playing){bird.vy+=.32;bird.y+=bird.vy;
+if(frame%100===0){let gap=170,top=100+Math.random()*(H-74-gap-200);pipes.push({x:W+15,top,bottom:top+gap,passed:false})}
+pipes.forEach(p=>{p.x-=2.7;if(!p.passed&&p.x+55<bird.x){p.passed=true;score++;scoreEl.textContent=score;play(2);toast.textContent=score%5===0?'🔥 ON FIRE!':'';setTimeout(()=>{if(toast.textContent)toast.textContent=''},700)}
+if(bird.x+bird.r>p.x&&bird.x-bird.r<p.x+55&&(bird.y-bird.r<p.top||bird.y+bird.r>p.bottom))finish()});
+pipes=pipes.filter(p=>p.x>-80);if(bird.y+bird.r>H-74||bird.y-bird.r<0)finish();}
+draw();drawPipes();drawBird();requestAnimationFrame(tick)}
+tick();
+})();
+</script></body></html>
